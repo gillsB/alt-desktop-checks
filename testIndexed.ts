@@ -11,11 +11,23 @@ function loadJsonFile(filePath: string) {
   }
 }
 
-function checkBackgrounds(backgroundsJsonPath: string, directoryPath: string) {
+function resolveBackgroundPath(bgKey: string, baseDir: string, externalDirs: string[]): string {
+  const extMatch = bgKey.match(/^ext::(\d+)::(.+)$/);
+  if (extMatch) {
+    const extIdx = parseInt(extMatch[1], 10);
+    const extKey = extMatch[2];
+    if (externalDirs[extIdx]) {
+      return path.join(externalDirs[extIdx], extKey);
+    }
+  }
+  return path.join(baseDir, bgKey);
+}
+
+function checkBackgrounds(backgroundsJsonPath: string, baseDir: string, externalDirs: string[]) {
   const backgroundsData = loadJsonFile(backgroundsJsonPath);
   if (!backgroundsData) return;
 
-  const { backgrounds, tags, names, externalPaths } = backgroundsData;
+  const { backgrounds } = backgroundsData;
 
   let mismatched = 0;
   let succeeded = 0;
@@ -26,19 +38,19 @@ function checkBackgrounds(backgroundsJsonPath: string, directoryPath: string) {
 
   // Iterate over all backgrounds in the backgrounds.json
   for (const [bgKey, expectedIndexed] of Object.entries(backgrounds)) {
-    const folderPath = path.join(directoryPath, bgKey);
+    const folderPath = resolveBackgroundPath(bgKey, baseDir, externalDirs);
     const bgJsonPath = path.join(folderPath, 'bg.json');
 
     // Check if the folder exists
     if (!fs.existsSync(folderPath)) {
-      console.log(`Missing folder for background: ${bgKey}`);
+      console.log(`Missing folder for background: ${bgKey} (resolved: ${folderPath})`);
       notFound++;
       continue;
     }
 
     // Check if bg.json exists in the folder
     if (!fs.existsSync(bgJsonPath)) {
-      console.log(`Missing bg.json for background: ${bgKey}`);
+      console.log(`Missing bg.json for background: ${bgKey} (resolved: ${bgJsonPath})`);
       noBgJson++;
       continue;
     }
@@ -46,7 +58,7 @@ function checkBackgrounds(backgroundsJsonPath: string, directoryPath: string) {
     // Load bg.json from the folder
     const bgData = loadJsonFile(bgJsonPath);
     if (!bgData) {
-      console.log(`No data in bg.json for background: ${bgKey}`);
+      console.log(`No data in bg.json for background: ${bgKey} (resolved: ${bgJsonPath})`);
       noData++;
       continue;
     }
@@ -74,15 +86,15 @@ function checkBackgrounds(backgroundsJsonPath: string, directoryPath: string) {
 }
 
 // Get the arguments from the command line
-const [,, backgroundsJsonPath, directoryPath] = process.argv;
+const [, , backgroundsJsonPath, baseDir, ...externalDirs] = process.argv;
 
-// Ensure that both arguments are provided
-if (!backgroundsJsonPath || !directoryPath) {
-  console.log("Usage: node script.js <backgroundsJsonPath> <directoryPath>");
+if (!backgroundsJsonPath || !baseDir) {
+  console.log("Usage: node script.js <backgroundsJsonPath> <directoryPath> <externalPath1> <externalPath2> ...");
   process.exit(1);
 }
 
 const absoluteBackgroundsJsonPath = path.resolve(backgroundsJsonPath);
-const absoluteDirectoryPath = path.resolve(directoryPath);
+const absoluteBaseDir = path.resolve(baseDir);
+const absoluteExternalDirs = externalDirs.map(p => path.resolve(p));
 
-checkBackgrounds(absoluteBackgroundsJsonPath, absoluteDirectoryPath);
+checkBackgrounds(absoluteBackgroundsJsonPath, absoluteBaseDir, absoluteExternalDirs);
